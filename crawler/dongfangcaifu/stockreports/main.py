@@ -13,7 +13,11 @@ from retrying import retry
 
 class StockReports(object):
     def __init__(self):
-        pass
+        self.__session = requests.Session()  # 复用session
+
+        self.__session.keep_alive = False
+
+        self.__session.trust_env = False
 
     @retry(stop_max_attempt_number=5)
     def get_name_to_code(self):
@@ -55,20 +59,13 @@ class StockReports(object):
             ('_', '1614156180684'),
         )
 
-        requests.adapters.DEFAULT_RETRIES = 5
-
-        session = requests.Session()
-
-        session.keep_alive = False
-
-        session.trust_env = False
-
         """
         连接超时是指在实现客户端到远端机器端口的连接时，Request等待的秒数，即发起请求连接到连接建立之间的最大时长；
         读取超时是指客户端等待服务器返回响应的时间，即连接成功开始到服务器返回响应之间等待的最大时长.
         元组：(连接超时, 读取超时)
         """
-        req = session.get(url=raw_info_url, params=raw_info_param, headers=headers, timeout=(3, 7), verify=False)
+        req = self.__session.get(url=raw_info_url, params=raw_info_param, headers=headers, timeout=(3, 7),
+                                 verify=False)
 
         req.encoding = 'UTF-8'
 
@@ -149,7 +146,10 @@ class StockReports(object):
         return reports_params
 
     @retry(stop_max_attempt_number=5)
-    def get_reports(self, reports_url, reports_param_no_page, reports_df, begin_date, end_date, progress, urls_num):
+    def get_reports(
+            self, reports_url, reports_param_no_page, reports_df,
+            begin_date, end_date, progress, urls_num
+    ):
         """
         根据URL及参数，请求得到每支股票发行年份至今的媒体报道，筛选出时间范围内的数据并保存至csv文件.
         :param reports_url: 每支股票的URL
@@ -178,14 +178,6 @@ class StockReports(object):
             'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
         }
 
-        requests.adapters.DEFAULT_RETRIES = 5
-
-        session = requests.Session()
-
-        session.keep_alive = False
-
-        session.trust_env = False
-
         page_no = 1
 
         while True:
@@ -196,7 +188,8 @@ class StockReports(object):
 
             reports_params += (page_param,)
 
-            req = session.get(url=reports_url, params=reports_params, headers=headers, timeout=(3, 7), verify=False)
+            req = self.__session.get(url=reports_url, params=reports_params, headers=headers, timeout=(3, 7),
+                                     verify=False)
 
             req.encoding = 'UTF-8'
 
@@ -249,7 +242,7 @@ class StockReports(object):
 
         return reports_df
 
-    def multiprocessing_run(self, get_reports_func, reports_params_no_page, begin_date, end_date):
+    def multiprocessing_crawl(self, get_reports_func, reports_params_no_page, begin_date, end_date):
         print('多进程爬取所有股票的媒体报道...')
 
         # 创建DataFrame
@@ -279,7 +272,9 @@ class StockReports(object):
             """
             pool_ret_list.append(pool.apply_async(
                 func=get_reports_func,
-                args=(reports_url, reports_param, reports_df, begin_date, end_date, progress, urls_num)
+                args=(
+                    reports_url, reports_param, reports_df, begin_date, end_date, progress, urls_num
+                )
             ))
 
         pool.close()
@@ -324,7 +319,7 @@ def main():
     reports_params_no_page = stock_reports.get_reports_params_no_page(name_code_df, begin_date, end_date)
 
     # 多进程爬取所有股票的媒体报道
-    stock_reports.multiprocessing_run(
+    stock_reports.multiprocessing_crawl(
         get_reports_func=stock_reports.get_reports, reports_params_no_page=reports_params_no_page,
         begin_date=begin_date, end_date=end_date
     )

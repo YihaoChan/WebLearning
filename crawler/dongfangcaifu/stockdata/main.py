@@ -13,7 +13,11 @@ from retrying import retry
 
 class StockData(object):
     def __init__(self):
-        pass
+        self.__session = requests.Session()  # 复用session
+
+        self.__session.keep_alive = False
+
+        self.__session.trust_env = False
 
     @retry(stop_max_attempt_number=5)
     def get_name_to_code(self):
@@ -55,21 +59,13 @@ class StockData(object):
             ('_', '1614156180684'),
         )
 
-        requests.adapters.DEFAULT_RETRIES = 5
-
-        # 关闭多余连接
-        session = requests.Session()
-
-        session.keep_alive = False
-
-        session.trust_env = False
-
         """
         连接超时是指在实现客户端到远端机器端口的连接时，Request等待的秒数，即发起请求连接到连接建立之间的最大时长；
         读取超时是指客户端等待服务器返回响应的时间，即连接成功开始到服务器返回响应之间等待的最大时长.
         元组：(连接超时, 读取超时)
         """
-        req = session.get(url=raw_info_url, params=raw_info_param, headers=headers, timeout=(3, 7), verify=False)
+        req = self.__session.get(url=raw_info_url, params=raw_info_param, headers=headers, timeout=(3, 7),
+                                 verify=False)
 
         req.encoding = 'UTF-8'
 
@@ -189,15 +185,7 @@ class StockData(object):
             'Accept-Language': 'en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7',
         }
 
-        requests.adapters.DEFAULT_RETRIES = 5
-
-        session = requests.Session()
-
-        session.keep_alive = False
-
-        session.trust_env = False
-
-        req = session.get(url=weekly_url, params=weekly_param, headers=headers, timeout=30, verify=False)
+        req = self.__session.get(url=weekly_url, params=weekly_param, headers=headers, timeout=(3, 7), verify=False)
 
         req.encoding = 'UTF-8'
 
@@ -253,7 +241,7 @@ class StockData(object):
 
         return weekly_df
 
-    def multiprocessing_run(self, get_weekly_info_func, weekly_params, begin_date, end_date):
+    def multiprocessing_crawl(self, get_weekly_info_func, weekly_params, begin_date, end_date):
         print('多进程爬取所有股票的每周交易数据...')
 
         # 创建DataFrame
@@ -324,7 +312,7 @@ def main():
 
     end_date = (datetime.datetime.now() + datetime.timedelta(days=-730)).strftime("%Y-%m-%d")
 
-    stock_data.multiprocessing_run(
+    stock_data.multiprocessing_crawl(
         get_weekly_info_func=stock_data.get_weekly_info, weekly_params=weekly_params,
         begin_date=begin_date, end_date=end_date
     )
